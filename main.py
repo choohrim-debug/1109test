@@ -9,14 +9,25 @@ st.markdown("""
 더 나아가 **서울의 기온 변화가 전력수요에 미치는 영향**을 시각적으로 살펴봅니다.
 """)
 
-# 안전하게 CSV 파일을 읽는 헬퍼 함수
+# 안전하게 CSV 파일을 읽고 상단 주석을 제거하는 헬퍼 함수
 def read_csv_with_encoding(path):
     for enc in ["utf-8-sig", "cp949", "utf-8", "euc-kr"]:
         try:
-            # 기상청 데이터 특성상 상단에 설명글(header)이 있을 수 있으므로 방어 코드 적용
+            # 기상청 주석(Header) 회피를 위해 0줄부터 5줄까지 스킵해보며 정상 데이터 탐색
+            for skip in range(6):
+                try:
+                    df = pd.read_csv(path, encoding=enc, skiprows=skip)
+                    df.columns = df.columns.str.strip()
+                    # 필수 데이터인 '일시' 혹은 '시간' 관련 컬럼이 헤더에 보이면 성공으로 간주
+                    if any(any(k in str(col) for k in ['일시', '일자', '시간', 'date', 'time']) for col in df.columns):
+                        return df
+                except:
+                    continue
+            
+            # 실패 시 기본으로 읽기
             df = pd.read_csv(path, encoding=enc)
-            if len(df.columns) > 0:
-                return df
+            df.columns = df.columns.str.strip()
+            return df
         except:
             continue
     return pd.read_csv(path)
@@ -36,21 +47,17 @@ def load_data():
     yang_df = read_csv_with_encoding(yang_path)
     power_df = read_csv_with_encoding(power_path)
     
-    # 컬럼명의 미세한 공백 제거
-    seoul_df.columns = seoul_df.columns.str.strip()
-    yang_df.columns = yang_df.columns.str.strip()
-    power_df.columns = power_df.columns.str.strip()
+    # --- 서울 컬럼 찾기 ---
+    seoul_time_col = [c for c in seoul_df.columns if any(k in c for k in ['일시', '시간', 'date'])][0] if any(any(k in c for k in ['일시', '시간', 'date']) for c in seoul_df.columns) else seoul_df.columns[0]
+    seoul_temp_col = [c for c in seoul_df.columns if '기온' in c][0] if any('기온' in c for c in seoul_df.columns) else seoul_df.columns[-1]
     
-    # [오류 해결 부위] 글자 매칭 실패를 대비해 인덱스 번호(위치) 기반으로 안전하게 추출
-    # 보통 '일시'는 3번째(인덱스 2), '기온'은 4번째(인덱스 3)에 위치함
-    seoul_time_col = [c for c in seoul_df.columns if '일시' in c][0] if any('일시' in c for c in seoul_df.columns) else seoul_df.columns[2]
-    seoul_temp_col = [c for c in seoul_df.columns if '기온' in c][0] if any('기온' in c for c in seoul_df.columns) else seoul_df.columns[3]
+    # --- 양평 컬럼 찾기 ---
+    yp_time_col = [c for c in yang_df.columns if any(k in c for k in ['일시', '시간', 'date'])][0] if any(any(k in c for k in ['일시', '시간', 'date']) for c in yang_df.columns) else yang_df.columns[0]
+    yp_temp_col = [c for c in yang_df.columns if '기온' in c][0] if any('기온' in c for c in yang_df.columns) else yang_df.columns[-1]
     
-    yp_time_col = [c for c in yang_df.columns if '일시' in c][0] if any('일시' in c for c in yang_df.columns) else yang_df.columns[2]
-    yp_temp_col = [c for c in yang_df.columns if '기온' in c][0] if any('기온' in c for c in yang_df.columns) else yang_df.columns[3]
-    
-    power_time_col = [c for c in power_df.columns if '일시' in c][0] if any('일시' in c for c in power_df.columns) else power_df.columns[0]
-    power_val_col = [c for c in power_df.columns if '전력' in c][0] if any('전력' in c for c in power_df.columns) else power_df.columns[1]
+    # --- 전력 컬럼 찾기 ---
+    power_time_col = [c for c in power_df.columns if any(k in c for k in ['일시', '시간', 'date'])][0] if any(any(k in c for k in ['일시', '시간', 'date']) for c in power_df.columns) else power_df.columns[0]
+    power_val_col = [c for c in power_df.columns if '전력' in c][0] if any('전력' in c for c in power_df.columns) else power_df.columns[-1]
     
     # '일시' 컬럼을 datetime 형식으로 변환
     seoul_df['일시'] = pd.to_datetime(seoul_df[seoul_time_col])
