@@ -51,14 +51,20 @@ def load_data():
     power_time_col = [c for c in power_df.columns if any(k in c for k in ['일시', '시간', 'date'])][0] if any(any(k in c for k in ['일시', '시간', 'date']) for c in power_df.columns) else power_df.columns[0]
     power_val_col = [c for c in power_df.columns if '전력' in c][0] if any('전력' in c for c in power_df.columns) else power_df.columns[-1]
     
-    # [오류 해결 부위] 최신 판다스 문법에 맞게 대문자 'H'를 소문자 'h'로 수정 완료!
-    seoul_df['일시'] = pd.to_datetime(seoul_df[seoul_time_col]).dt.round('h')
-    yang_df['일시'] = pd.to_datetime(yang_df[yp_time_col]).dt.round('h')
-    power_df['일시'] = pd.to_datetime(power_df[power_time_col]).dt.round('h')
+    # [핵심 보완] 포맷 변환 오류를 막기 위해 errors='coerce'를 주고 정각 단위('h')로 똑같이 맞춤
+    seoul_df['일시_dt'] = pd.to_datetime(seoul_df[seoul_time_col], errors='coerce').dt.round('h')
+    yang_df['일시_dt'] = pd.to_datetime(yang_df[yp_time_col], errors='coerce').dt.round('h')
+    power_df['일시_dt'] = pd.to_datetime(power_df[power_time_col], errors='coerce').dt.round('h')
     
-    seoul_df = seoul_df[['일시', seoul_temp_col]].rename(columns={seoul_temp_col: '서울 기온'})
-    yang_df = yang_df[['일시', yp_temp_col]].rename(columns={yp_temp_col: '양평 기온'})
-    power_df = power_df[['일시', power_val_col]].rename(columns={power_val_col: '전력수요(MWh)'})
+    # 변환 실패(NaT) 데이터 제거
+    seoul_df = seoul_df.dropna(subset=['일시_dt'])
+    yang_df = yang_df.dropna(subset=['일시_dt'])
+    power_df = power_df.dropna(subset=['일시_dt'])
+    
+    # 필요한 컬럼 정제
+    seoul_df = seoul_df[['일시_dt', seoul_temp_col]].rename(columns={'일시_dt': '일시', seoul_temp_col: '서울 기온'})
+    yang_df = yang_df[['일시_dt', yp_temp_col]].rename(columns={'일시_dt': '일시', yp_temp_col: '양평 기온'})
+    power_df = power_df[['일시_dt', power_val_col]].rename(columns={'일시_dt': '일시', power_val_col: '전력수요(MWh)'})
     
     return seoul_df, yang_df, power_df
 
@@ -77,7 +83,9 @@ try:
         weather_merged = pd.merge(seoul_df, yang_df, on='일시', how='inner')
         
         if len(weather_merged) == 0:
-            st.warning("⚠️ 서울 데이터와 양평 데이터의 시간대 정보가 일치하지 않아 매칭된 기온 데이터가 없습니다. 파일 내용을 확인해 주세요.")
+            st.warning("⚠️ 날짜 형식이 여전히 매칭되지 않습니다. 데이터 샘플을 화면에 임시로 출력합니다.")
+            st.write("서울 데이터 샘플:", seoul_df.head(2))
+            st.write("양평 데이터 샘플:", yang_df.head(2))
         else:
             weather_merged['기온차(서울-양평)'] = weather_merged['서울 기온'] - weather_merged['양평 기온']
             weather_merged['시각'] = weather_merged['일시'].dt.hour
@@ -104,7 +112,8 @@ try:
         power_merged = pd.merge(seoul_df, power_df, on='일시', how='inner')
         
         if len(power_merged) == 0:
-            st.error("⚠️ 서울 기온 파일과 전력수요 파일의 '일시' 형식이 일치하지 않아 그래프를 그릴 수 없습니다.")
+            st.error("⚠️ 서울 기온과 전력 데이터의 시간 포맷이 결합되지 않았습니다.")
+            st.write("전력 데이터 샘플:", power_df.head(2))
         else:
             power_merged['월'] = power_merged['일시'].dt.month
             
