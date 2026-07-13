@@ -41,7 +41,7 @@ def load_data():
     yang_df = read_csv_with_encoding(yang_path)
     power_df = read_csv_with_encoding(power_path)
     
-    # 컬럼 매칭 (텍스트 검색 기반 방어코드)
+    # 컬럼 매칭
     seoul_time_col = [c for c in seoul_df.columns if any(k in c for k in ['일시', '시간', 'date'])][0] if any(any(k in c for k in ['일시', '시간', 'date']) for c in seoul_df.columns) else seoul_df.columns[0]
     seoul_temp_col = [c for c in seoul_df.columns if '기온' in c][0] if any('기온' in c for c in seoul_df.columns) else seoul_df.columns[-1]
     
@@ -51,11 +51,10 @@ def load_data():
     power_time_col = [c for c in power_df.columns if any(k in c for k in ['일시', '시간', 'date'])][0] if any(any(k in c for k in ['일시', '시간', 'date']) for c in power_df.columns) else power_df.columns[0]
     power_val_col = [c for c in power_df.columns if '전력' in c][0] if any('전력' in c for c in power_df.columns) else power_df.columns[-1]
     
-    # [핵심 수정 부위] 시간 포맷 불일치 에러를 원천 차단하기 위해 정규화 수행
-    # 초/분 단위를 정각(예: 01시 00분) 단위로 둥글게 깎아 병합률을 극대화합니다.
-    seoul_df['일시'] = pd.to_datetime(seoul_df[seoul_time_col]).dt.round('H')
-    yang_df['일시'] = pd.to_datetime(yang_df[yp_time_col]).dt.round('H')
-    power_df['일시'] = pd.to_datetime(power_df[power_time_col]).dt.round('H')
+    # [오류 해결 부위] 최신 판다스 문법에 맞게 대문자 'H'를 소문자 'h'로 수정 완료!
+    seoul_df['일시'] = pd.to_datetime(seoul_df[seoul_time_col]).dt.round('h')
+    yang_df['일시'] = pd.to_datetime(yang_df[yp_time_col]).dt.round('h')
+    power_df['일시'] = pd.to_datetime(power_df[power_time_col]).dt.round('h')
     
     seoul_df = seoul_df[['일시', seoul_temp_col]].rename(columns={seoul_temp_col: '서울 기온'})
     yang_df = yang_df[['일시', yp_temp_col]].rename(columns={yp_temp_col: '양평 기온'})
@@ -102,12 +101,10 @@ try:
     with tab2:
         st.header("서울 기온과 전력수요의 연관성 분석")
         
-        # 데이터가 안전하게 병합되었는지 체크
         power_merged = pd.merge(seoul_df, power_df, on='일시', how='inner')
         
         if len(power_merged) == 0:
             st.error("⚠️ 서울 기온 파일과 전력수요 파일의 '일시' 형식이 일치하지 않아 그래프를 그릴 수 없습니다.")
-            st.info("💡 팁: 한 파일은 '2025-01-01' 형식을 쓰고 다른 파일은 '2025/01/01' 또는 '2025.01.01' 형식을 쓰는지 확인해 보세요.")
         else:
             power_merged['월'] = power_merged['일시'].dt.month
             
@@ -125,4 +122,3 @@ try:
 
 except Exception as e:
     st.error(f"⚠️ 시스템 오류가 발생했습니다: {e}")
-
