@@ -78,4 +78,13 @@ try:
     st.header("② 시각(0~23시)별 평균 기온차 (서울 - 양평)")
     st.markdown("하루 중 어느 시간대에 도시 열섬현상(기온차)이 가장 뚜렷하게 나타나는지 확인합니다.")
     hourly_diff = df.groupby('시각')['기온차(서울-양평)'].mean()
-    st.bar_chart(hourly
+    st.bar_chart(hourly_diff)
+
+    # ③ 월별 평균 기온차
+    st.header("③ 월(1~12월)별 평균 기온차 (서울 - 양평)")
+    st.markdown("계절별(월별)로 도시 열섬현상의 세기가 어떻게 달라지는지 확인합니다.")
+    monthly_diff = df.groupby('월')['기온차(서울-양평)'].mean()
+    st.bar_chart(monthly_diff)
+
+except Exception as e:
+    st.error(f"⚠️ 에러가 발생했습니다: {e}") 
