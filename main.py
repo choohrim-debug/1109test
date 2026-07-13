@@ -11,16 +11,14 @@ st.markdown("""
 
 # 안전하게 CSV 파일을 읽는 헬퍼 함수
 def read_csv_with_encoding(path):
-    # 맥/윈도우 인코딩 문제를 해결하기 위해 여러 인코딩을 순서대로 시도
     for enc in ["utf-8-sig", "cp949", "utf-8", "euc-kr"]:
         try:
+            # 기상청 데이터 특성상 상단에 설명글(header)이 있을 수 있으므로 방어 코드 적용
             df = pd.read_csv(path, encoding=enc)
-            # 정상적으로 데이터가 읽혔고 컬럼이 존재하면 반환
             if len(df.columns) > 0:
                 return df
         except:
             continue
-    # 모두 실패할 경우 기본값으로 읽기
     return pd.read_csv(path)
 
 # 데이터 불러오기 함수
@@ -33,7 +31,7 @@ def load_data():
     yang_path = os.path.join(current_dir, "yang.csv")
     power_path = os.path.join(current_dir, "power.csv")
     
-    # 안전하게 데이터 로드
+    # 데이터 로드
     seoul_df = read_csv_with_encoding(seoul_path)
     yang_df = read_csv_with_encoding(yang_path)
     power_df = read_csv_with_encoding(power_path)
@@ -43,15 +41,21 @@ def load_data():
     yang_df.columns = yang_df.columns.str.strip()
     power_df.columns = power_df.columns.str.strip()
     
-    # 각 파일별 필요한 컬럼 자동 매칭 ('기온' 혹은 '전력' 글자가 포함된 컬럼 찾기)
-    seoul_temp_col = [c for c in seoul_df.columns if '기온' in c][0]
-    yp_temp_col = [c for c in yang_df.columns if '기온' in c][0]
-    power_val_col = [c for c in power_df.columns if '전력' in c][0]
+    # [오류 해결 부위] 글자 매칭 실패를 대비해 인덱스 번호(위치) 기반으로 안전하게 추출
+    # 보통 '일시'는 3번째(인덱스 2), '기온'은 4번째(인덱스 3)에 위치함
+    seoul_time_col = [c for c in seoul_df.columns if '일시' in c][0] if any('일시' in c for c in seoul_df.columns) else seoul_df.columns[2]
+    seoul_temp_col = [c for c in seoul_df.columns if '기온' in c][0] if any('기온' in c for c in seoul_df.columns) else seoul_df.columns[3]
+    
+    yp_time_col = [c for c in yang_df.columns if '일시' in c][0] if any('일시' in c for c in yang_df.columns) else yang_df.columns[2]
+    yp_temp_col = [c for c in yang_df.columns if '기온' in c][0] if any('기온' in c for c in yang_df.columns) else yang_df.columns[3]
+    
+    power_time_col = [c for c in power_df.columns if '일시' in c][0] if any('일시' in c for c in power_df.columns) else power_df.columns[0]
+    power_val_col = [c for c in power_df.columns if '전력' in c][0] if any('전력' in c for c in power_df.columns) else power_df.columns[1]
     
     # '일시' 컬럼을 datetime 형식으로 변환
-    seoul_df['일시'] = pd.to_datetime(seoul_df['일시'])
-    yang_df['일시'] = pd.to_datetime(yang_df['일시'])
-    power_df['일시'] = pd.to_datetime(power_df['일시'])
+    seoul_df['일시'] = pd.to_datetime(seoul_df[seoul_time_col])
+    yang_df['일시'] = pd.to_datetime(yang_df[yp_time_col])
+    power_df['일시'] = pd.to_datetime(power_df[power_time_col])
     
     # 필요한 컬럼만 추출 및 이름 통일
     seoul_df = seoul_df[['일시', seoul_temp_col]].rename(columns={seoul_temp_col: '서울 기온'})
